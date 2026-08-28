@@ -1,0 +1,6 @@
+{
+  "name": "Multi-Agent AI Interview Panel Simulator",
+  "description": "Multi-Agent AI Interview Deliberation & Candidate Evaluation Framework with independent persona reasoning, interactive cross-agent debate, evidence quote tracing, and consensus decision synthesis.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
