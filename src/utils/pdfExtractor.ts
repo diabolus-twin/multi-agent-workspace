@@ -3,6 +3,7 @@ import * as pdfjsLib from 'pdfjs-dist';
 // Set up worker source for browser pdfjs-dist
 try {
   if (typeof window !== 'undefined') {
+    // Set standard CDN worker with fallback
     pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version || '4.10.38'}/pdf.worker.min.mjs`;
   }
 } catch {
@@ -11,6 +12,7 @@ try {
 
 export interface ExtractedDocument {
   fileName: string;
+  fileSize: number;
   fileType: 'resume' | 'transcript' | 'job_description' | 'other';
   rawText: string;
   pageCount?: number;
@@ -18,9 +20,12 @@ export interface ExtractedDocument {
 }
 
 /**
- * Extract clean text from a File (PDF, TXT, MD, JSON, etc.)
+ * Extract clean, well-formatted text from a File (PDF, TXT, MD, JSON, VTT, SRT, etc.)
  */
-export async function extractTextFromFile(file: File, fileType: ExtractedDocument['fileType']): Promise<ExtractedDocument> {
+export async function extractTextFromFile(
+  file: File, 
+  fileType: ExtractedDocument['fileType']
+): Promise<ExtractedDocument> {
   const extension = file.name.split('.').pop()?.toLowerCase() || '';
 
   if (extension === 'pdf' || file.type === 'application/pdf') {
@@ -33,15 +38,45 @@ export async function extractTextFromFile(file: File, fileType: ExtractedDocumen
       for (let i = 1; i <= pdf.numPages; i++) {
         const page = await pdf.getPage(i);
         const textContent = await page.getTextContent();
-        const pageString = textContent.items
-          .map((item: any) => ('str' in item ? item.str : ''))
-          .join(' ');
-        pageTexts.push(`--- Page ${i} ---\n${pageString}`);
+        
+        let lastY: number | null = null;
+        let pageLines: string[] = [];
+        let currentLine = '';
+
+        for (const item of textContent.items as any[]) {
+          if (!('str' in item)) continue;
+          
+          const currentY = item.transform ? item.transform[5] : null;
+          
+          // If Y position changed significantly, start a new line
+          if (lastY !== null && currentY !== null && Math.abs(currentY - lastY) > 5) {
+            if (currentLine.trim()) {
+              pageLines.push(currentLine.trim());
+            }
+            currentLine = item.str;
+          } else {
+            // Same line: append with space if needed
+            if (currentLine && !currentLine.endsWith(' ') && !item.str.startsWith(' ')) {
+              currentLine += ' ' + item.str;
+            } else {
+              currentLine += item.str;
+            }
+          }
+          lastY = currentY;
+        }
+
+        if (currentLine.trim()) {
+          pageLines.push(currentLine.trim());
+        }
+
+        const pageFormatted = pageLines.join('\n');
+        pageTexts.push(`--- Page ${i} ---\n${pageFormatted}`);
       }
 
       const rawText = pageTexts.join('\n\n');
       return {
         fileName: file.name,
+        fileSize: file.size,
         fileType,
         rawText,
         pageCount: pdf.numPages,
@@ -49,13 +84,15 @@ export async function extractTextFromFile(file: File, fileType: ExtractedDocumen
       };
     } catch (err) {
       console.warn('PDF extraction using pdfjs-dist failed, attempting fallback reader:', err);
-      // Fallback text reading
+      // Fallback plain text reading
       const fallbackText = await file.text();
+      const cleaned = fallbackText.replace(/[^\x20-\x7E\n\r\t]/g, ' ').replace(/\s+/g, ' ');
       return {
         fileName: file.name,
+        fileSize: file.size,
         fileType,
-        rawText: fallbackText.replace(/[^\x20-\x7E\n\r\t]/g, ' '),
-        wordCount: fallbackText.split(/\s+/).filter(Boolean).length,
+        rawText: cleaned,
+        wordCount: cleaned.split(/\s+/).filter(Boolean).length,
       };
     }
   }
@@ -64,10 +101,74 @@ export async function extractTextFromFile(file: File, fileType: ExtractedDocumen
   const rawText = await file.text();
   return {
     fileName: file.name,
+    fileSize: file.size,
     fileType,
     rawText,
     wordCount: rawText.split(/\s+/).filter(Boolean).length,
   };
+}
+
+/**
+ * Extract multiple transcript files (e.g. Technical Round 1, System Design Round 2, HR Round 3)
+ */
+export async function extractMultipleTranscripts(files: File[]): Promise<{
+  combinedText: string;
+  filesSummary: { name: string; words: number }[];
+  totalWords: number;
+}> {
+  const summaries: { name: string; words: number }[] = [];
+  const textParts: string[] = [];
+
+  for (const file of files) {
+    const extracted = await extractTextFromFile(file, 'transcript');
+    summaries.push({
+      name: file.name,
+      words: extracted.wordCount,
+    });
+    textParts.push(`=== TRANSCRIPT SOURCE: ${file.name} ===\n${extracted.rawText}`);
+  }
+
+  const combinedText = textParts.join('\n\n\n');
+  return {
+    combinedText,
+    filesSummary: summaries,
+    totalWords: combinedText.split(/\s+/).filter(Boolean).length,
+  };
+}
+
+/**
+ * Attempts to parse candidate name and target title from resume text
+ */
+export function extractCandidateMetadataFromText(text: string): {
+  candidateName?: string;
+  detectedRole?: string;
+} {
+  const lines = text
+    .split('\n')
+    .map(l => l.trim())
+    .filter(l => l && !l.startsWith('---'));
+
+  let candidateName: string | undefined;
+  let detectedRole: string | undefined;
+
+  // First non-empty line under 40 characters often contains candidate name
+  for (const line of lines.slice(0, 5)) {
+    const clean = line.replace(/^(resume|curriculum vitae|cv)[:\s-]*/i, '').trim();
+    if (clean.length > 2 && clean.length < 40 && !clean.includes('@') && !clean.includes('http') && !/^\d/.test(clean)) {
+      candidateName = clean;
+      break;
+    }
+  }
+
+  // Look for role title in the next few lines
+  for (const line of lines.slice(1, 8)) {
+    if (/engineer|developer|architect|manager|lead|director|specialist|designer/i.test(line) && line.length < 60) {
+      detectedRole = line;
+      break;
+    }
+  }
+
+  return { candidateName, detectedRole };
 }
 
 /**

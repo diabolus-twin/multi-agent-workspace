@@ -24,6 +24,7 @@ import { EvidenceDrawer } from './components/EvidenceDrawer';
 import { RubricModal } from './components/RubricModal';
 import { DossierEditorModal } from './components/DossierEditorModal';
 import { SettingsModal } from './components/SettingsModal';
+import { UploadDocumentModal } from './components/UploadDocumentModal';
 
 export default function App() {
   // Global Data State
@@ -60,6 +61,7 @@ export default function App() {
   const [isRubricModalOpen, setIsRubricModalOpen] = useState<boolean>(false);
   const [isDossierModalOpen, setIsDossierModalOpen] = useState<boolean>(false);
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState<boolean>(false);
+  const [isUploadModalOpen, setIsUploadModalOpen] = useState<boolean>(false);
 
   // API Headers helper for custom API keys & model selection
   const getApiHeaders = () => {
@@ -426,6 +428,29 @@ export default function App() {
     setSelectedCandidateId(newCand.id);
   };
 
+  const handleIngestAndEvaluate = (candidate: CandidateDossier, jobDesc?: JobDescription) => {
+    setCandidates(prev => {
+      const exists = prev.some(c => c.id === candidate.id);
+      if (exists) {
+        return prev.map(c => c.id === candidate.id ? candidate : c);
+      }
+      return [...prev, candidate];
+    });
+
+    if (jobDesc) {
+      setJobDescription(jobDesc);
+    }
+
+    setSelectedCandidateId(candidate.id);
+    setActiveView('pipeline');
+    setCurrentPipelineStage('profile');
+
+    // Trigger profile builder for this new candidate
+    setTimeout(() => {
+      handleRunProfileBuilder();
+    }, 100);
+  };
+
   return (
     <div className="min-h-screen bg-slate-100/70 text-slate-900 flex flex-col font-sans selection:bg-indigo-500 selection:text-white">
       
@@ -448,6 +473,7 @@ export default function App() {
         onOpenRubricModal={() => setIsRubricModalOpen(true)}
         onOpenDossierModal={() => setIsDossierModalOpen(true)}
         onOpenSettingsModal={() => setIsSettingsModalOpen(true)}
+        onOpenUploadModal={() => setIsUploadModalOpen(true)}
       />
 
       {/* Deliberation Pipeline Controls Bar (visible in pipeline and debate studio) */}
@@ -476,6 +502,7 @@ export default function App() {
                 candidateName={currentCandidate.name}
                 onInspectQuote={handleInspectQuote}
                 onRunProfileBuilder={handleRunProfileBuilder}
+                onOpenUploadModal={() => setIsUploadModalOpen(true)}
                 isLoading={isLoading}
               />
             )}
@@ -632,6 +659,13 @@ export default function App() {
       <SettingsModal
         isOpen={isSettingsModalOpen}
         onClose={() => setIsSettingsModalOpen(false)}
+      />
+
+      {/* PDF Document Ingestion Modal */}
+      <UploadDocumentModal
+        isOpen={isUploadModalOpen}
+        onClose={() => setIsUploadModalOpen(false)}
+        onIngestAndEvaluate={handleIngestAndEvaluate}
       />
 
     </div>

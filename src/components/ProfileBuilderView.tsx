@@ -11,7 +11,8 @@ import {
   Quote, 
   ExternalLink,
   ShieldCheck,
-  Search
+  Search,
+  UploadCloud
 } from 'lucide-react';
 import { CandidateProfile, ExtractedClaim } from '../types';
 
@@ -20,6 +21,7 @@ interface ProfileBuilderViewProps {
   candidateName: string;
   onInspectQuote: (quote: string, source: 'resume' | 'transcript') => void;
   onRunProfileBuilder: () => void;
+  onOpenUploadModal?: () => void;
   isLoading: boolean;
 }
 
@@ -28,27 +30,39 @@ export const ProfileBuilderView: React.FC<ProfileBuilderViewProps> = ({
   candidateName,
   onInspectQuote,
   onRunProfileBuilder,
+  onOpenUploadModal,
   isLoading
 }) => {
   if (!profile) {
     return (
-      <div className="bg-white rounded-2xl border border-slate-200 p-12 text-center shadow-xs">
-        <div className="w-16 h-16 bg-indigo-50 text-indigo-600 rounded-2xl flex items-center justify-center mx-auto mb-4 border border-indigo-100">
+      <div className="bg-white rounded-3xl border border-slate-200 p-10 text-center shadow-xs max-w-2xl mx-auto">
+        <div className="w-16 h-16 bg-indigo-50 text-indigo-600 rounded-2xl flex items-center justify-center mx-auto mb-4 border border-indigo-100 shadow-xs">
           <FileText className="w-8 h-8" />
         </div>
-        <h3 className="text-lg font-bold text-slate-900">Candidate Profile Builder (Step 1)</h3>
-        <p className="text-sm text-slate-500 max-w-md mx-auto mt-1 mb-6">
-          The Profile Builder reads the resume and interview transcript to extract shared verified facts, claims, and contradictions that all 4 autonomous agents will evaluate.
+        <h3 className="text-xl font-bold text-slate-900">Candidate Profile Builder (Step 1)</h3>
+        <p className="text-sm text-slate-500 max-w-md mx-auto mt-2 mb-6 leading-relaxed">
+          The Profile Builder ingests the candidate resume, interview transcript, and job application to extract verified facts, audit assertions, and uncover contradictions for the 4-agent panel.
         </p>
-        <button
-          id="trigger-profile-builder-btn"
-          onClick={onRunProfileBuilder}
-          disabled={isLoading}
-          className="px-6 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-sm shadow-sm transition disabled:opacity-50 inline-flex items-center space-x-2"
-        >
-          <Search className="w-4 h-4" />
-          <span>{isLoading ? 'Extracting Claims & Facts...' : `Build Profile for ${candidateName}`}</span>
-        </button>
+        <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
+          {onOpenUploadModal && (
+            <button
+              onClick={onOpenUploadModal}
+              className="w-full sm:w-auto px-5 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-semibold text-sm shadow-xs transition inline-flex items-center justify-center space-x-2"
+            >
+              <UploadCloud className="w-4 h-4 text-sky-400" />
+              <span>Upload PDF Files</span>
+            </button>
+          )}
+          <button
+            id="trigger-profile-builder-btn"
+            onClick={onRunProfileBuilder}
+            disabled={isLoading}
+            className="w-full sm:w-auto px-6 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-sm shadow-xs transition disabled:opacity-50 inline-flex items-center justify-center space-x-2"
+          >
+            <Search className="w-4 h-4" />
+            <span>{isLoading ? 'Extracting Claims & Facts...' : `Build Profile for ${candidateName}`}</span>
+          </button>
+        </div>
       </div>
     );
   }
